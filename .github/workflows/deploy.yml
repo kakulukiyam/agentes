@@ -13,8 +13,6 @@ permissions:
 
 env:
   AWS_REGION: "us-east-1"
-  # ARN del Rol IAM OIDC (configurado en GitHub Variables o Secrets)
-  AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN || 'arn:aws:iam::684488299947:role/citas-escolares-github-oidc-role' }}
 
 jobs:
   # ============================================================================
@@ -38,10 +36,13 @@ jobs:
       - name: Autenticación con AWS vía OIDC (Sin llaves fijas)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           audience: sts.amazonaws.com
-          role-session-name: GitHubActions-Infra-${{ github.run_id }}
+          role-session-name: GitHubActions-Infra
+
+      - name: Verificar identidad AWS
+        run: aws sts get-caller-identity
 
       - name: Instalar Terraform
         uses: hashicorp/setup-terraform@v3
@@ -85,10 +86,10 @@ jobs:
       - name: Autenticación con AWS vía OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           audience: sts.amazonaws.com
-          role-session-name: GitHubActions-Backend-${{ github.run_id }}
+          role-session-name: GitHubActions-Backend
 
       - name: Configurar Python
         uses: actions/setup-python@v5
@@ -126,10 +127,10 @@ jobs:
       - name: Autenticación con AWS vía OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           audience: sts.amazonaws.com
-          role-session-name: GitHubActions-Frontend-${{ github.run_id }}
+          role-session-name: GitHubActions-Frontend
 
       - name: Inyectar Configuración Dinámica (config.js)
         run: |

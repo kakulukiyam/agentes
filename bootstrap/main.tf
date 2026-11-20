@@ -42,6 +42,7 @@ resource "aws_iam_openid_connect_provider" "github_oidc" {
 
   # Thumbprints oficiales de GitHub Actions OIDC
   thumbprint_list = [
+    "d367a47959a77b088bec4fe3e7dd3ec9ba733ab5",
     "ab9d0263244dd0326eb67015705a667e79cfe998",
     "6938fd4d98bab03faadb97b34396831e3780aea1",
     "1c5876bd52c0005b5b828fe01fae4270e044240f"
