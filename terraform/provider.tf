@@ -3,7 +3,7 @@ terraform {
 
   # Backend Remoto S3 con Bloqueo de Estado DynamoDB (Generado en la fase de Bootstrap)
   backend "s3" {
-    bucket         = "citas-escolares-tfstate-393v53"
+    bucket         = "citas-escolares-tfstate-btamu4"
     key            = "prod/terraform.tfstate"
     region         = "us-east-1"
     dynamodb_table = "citas-escolares-tflocks"

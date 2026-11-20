@@ -13,7 +13,7 @@ variable "project_name" {
 variable "github_repo" {
   description = "Repositorio de GitHub en formato 'usuario_u_organizacion/nombre_del_repo' (Ej: 'mi-colegio/citas-serverless')"
   type        = string
-  default     = "tu-organizacion/citas-escolares"
+  default     = "kakulukiyam/agentes"
 }
 
 variable "github_branch" {

@@ -36,7 +36,7 @@ jobs:
       - name: Autenticación con AWS vía OIDC (Sin llaves fijas)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN || 'arn:aws:iam::037668896847:role/citas-escolares-github-oidc-role' }}
           aws-region: ${{ env.AWS_REGION }}
           audience: sts.amazonaws.com
           role-session-name: GitHubActions-Infra
@@ -86,7 +86,7 @@ jobs:
       - name: Autenticación con AWS vía OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN || 'arn:aws:iam::037668896847:role/citas-escolares-github-oidc-role' }}
           aws-region: ${{ env.AWS_REGION }}
           audience: sts.amazonaws.com
           role-session-name: GitHubActions-Backend
@@ -127,7 +127,7 @@ jobs:
       - name: Autenticación con AWS vía OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN || 'arn:aws:iam::037668896847:role/citas-escolares-github-oidc-role' }}
           aws-region: ${{ env.AWS_REGION }}
           audience: sts.amazonaws.com
           role-session-name: GitHubActions-Frontend
