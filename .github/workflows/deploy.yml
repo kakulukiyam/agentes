@@ -13,8 +13,8 @@ permissions:
 
 env:
   AWS_REGION: "us-east-1"
-  # Configurar este ARN en GitHub > Settings > Secrets and variables > Actions > Variables
-  AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+  # ARN del Rol IAM OIDC (configurado en GitHub Variables o Secrets)
+  AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN || 'arn:aws:iam::684488299947:role/citas-escolares-github-oidc-role' }}
 
 jobs:
   # ============================================================================
@@ -41,6 +41,7 @@ jobs:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           audience: sts.amazonaws.com
+          role-session-name: GitHubActions-Infra-${{ github.run_id }}
 
       - name: Instalar Terraform
         uses: hashicorp/setup-terraform@v3
@@ -87,6 +88,7 @@ jobs:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           audience: sts.amazonaws.com
+          role-session-name: GitHubActions-Backend-${{ github.run_id }}
 
       - name: Configurar Python
         uses: actions/setup-python@v5
@@ -127,6 +129,7 @@ jobs:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           audience: sts.amazonaws.com
+          role-session-name: GitHubActions-Frontend-${{ github.run_id }}
 
       - name: Inyectar Configuración Dinámica (config.js)
         run: |
