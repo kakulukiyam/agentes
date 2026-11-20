@@ -1,0 +1,61 @@
+# ==============================================================================
+# Terraform (Binarios, Plugins y Estado)
+# ==============================================================================
+# Directorios locales donde Terraform descarga los binarios de los proveedores
+.terraform/
+**/.terraform/
+**/.terraform/*
+
+# Binarios de proveedores y ejecutables
+*.exe
+terraform-provider-*
+/terraform.exe
+
+# Archivos de empaquetado para Lambdas
+*.zip
+
+# Archivos de estado local y respaldos (evita exponer credenciales e infraestructura)
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# Archivos de variables locales con credenciales o configuraciones privadas
+*.tfvars
+*.tfvars.json
+!*.example
+!*.tfvars.example
+
+# Logs y overrides
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# ==============================================================================
+# Python / Backend
+# ==============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+dist/
+*.egg-info/
+.env
+
+# ==============================================================================
+# Sistema Operativo y Editores
+# ==============================================================================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arquitectura AWS Serverless - Sistema de Citas Escolares</title>
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --bg-card: #1e293b;
+      --bg-card-hover: #334155;
+      --border-color: #334155;
+      --aws-orange: #ff9900;
+      --aws-squid-ink: #232f3e;
+      --aws-blue: #0ea5e9;
+      --aws-purple: #a855f7;
+      --aws-green: #22c55e;
+      --aws-red: #ef4444;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      padding: 24px;
+      min-height: 100vh;
+    }
+
+    header {
+      max-width: 1200px;
+      margin: 0 auto 24px auto;
+      text-align: center;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-radius: 9999px;
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: 800;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, #fff 30%, var(--aws-orange) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    p.subtitle {
+      color: var(--text-muted);
+      font-size: 1rem;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    /* Controles de Flujo */
+    .controls {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin: 20px auto;
+      flex-wrap: wrap;
+    }
+
+    .flow-btn {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-muted);
+      padding: 8px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.9rem;
+      transition: all 0.2s ease;
+    }
+
+    .flow-btn:hover {
+      color: white;
+      border-color: var(--aws-blue);
+    }
+
+    .flow-btn.active {
+      background: rgba(14, 165, 233, 0.15);
+      color: var(--aws-blue);
+      border-color: var(--aws-blue);
+      box-shadow: 0 0 15px rgba(14, 165, 233, 0.25);
+    }
+
+    .flow-btn[data-flow="acudiente"].active {
+      background: rgba(34, 197, 94, 0.15);
+      color: var(--aws-green);
+      border-color: var(--aws-green);
+      box-shadow: 0 0 15px rgba(34, 197, 94, 0.25);
+    }
+
+    .flow-btn[data-flow="profesor"].active {
+      background: rgba(168, 85, 247, 0.15);
+      color: var(--aws-purple);
+      border-color: var(--aws-purple);
+      box-shadow: 0 0 15px rgba(168, 85, 247, 0.25);
+    }
+
+    /* Layout principal */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+    }
+
+    .canvas-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 24px;
+      position: relative;
+      overflow-x: auto;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+    }
+
+    /* Diagrama SVG */
+    svg.architecture-svg {
+      width: 100%;
+      min-width: 950px;
+      height: 580px;
+      display: block;
+    }
+
+    /* Estilos de Nodos en SVG */
+    .node-group {
+      cursor: pointer;
+      transition: transform 0.2s ease;
+    }
+
+    .node-group:hover {
+      transform: translateY(-2px);
+    }
+
+    .node-box {
+      rx: 12;
+      ry: 12;
+      stroke-width: 1.5;
+      transition: all 0.3s ease;
+    }
+
+    .node-title {
+      font-size: 13px;
+      font-weight: 700;
+      fill: #ffffff;
+    }
+
+    .node-subtitle {
+      font-size: 11px;
+      fill: var(--text-muted);
+    }
+
+    .node-badge {
+      font-size: 9px;
+      font-weight: 700;
+      fill: #ffffff;
+    }
+
+    /* Conexiones */
+    .conn-path {
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      transition: all 0.3s ease;
+      opacity: 0.6;
+    }
+
+    .conn-path.animated {
+      stroke-dasharray: 6, 6;
+      animation: dash 1.5s linear infinite;
+    }
+
+    @keyframes dash {
+      to {
+        stroke-dashoffset: -24;
+      }
+    }
+
+    .conn-label {
+      font-size: 10px;
+      font-weight: 600;
+      fill: #94a3b8;
+      text-anchor: middle;
+      background: #1e293b;
+    }
+
+    /* Zonas de AWS */
+    .aws-boundary {
+      fill: rgba(255, 153, 0, 0.02);
+      stroke: rgba(255, 153, 0, 0.25);
+      stroke-width: 1.5;
+      stroke-dasharray: 6 6;
+      rx: 16;
+    }
+
+    /* Panel de Detalles */
+    .details-panel {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 16px;
+      margin-top: 10px;
+    }
+
+    .info-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 18px;
+    }
+
+    .info-card h3 {
+      font-size: 1.05rem;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .info-card p, .info-card ul {
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .info-card ul {
+      padding-left: 20px;
+      margin-top: 6px;
+    }
+
+    .info-card li {
+      margin-bottom: 4px;
+    }
+
+    .cost-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 0.82rem;
+    }
+
+    .cost-table th, .cost-table td {
+      padding: 6px 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .cost-table th {
+      color: var(--text-main);
+      background: rgba(255,255,255,0.03);
+    }
+
+    .cost-free {
+      color: var(--aws-green);
+      font-weight: 700;
+    }
+
+    .highlight-pill {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-family: monospace;
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: #38bdf8;
+    }
+
+    /* Tooltip modal al seleccionar nodo */
+    #service-modal {
+      display: none;
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      max-width: 380px;
+      background: #0f172a;
+      border: 1px solid var(--aws-orange);
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+      z-index: 100;
+    }
+
+    #service-modal h4 {
+      color: var(--aws-orange);
+      margin-bottom: 6px;
+      font-size: 1rem;
+    }
+
+    #service-modal p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    #service-modal .close-btn {
+      background: none;
+      border: none;
+      color: #94a3b8;
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      font-size: 1.2rem;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="badge">Arquitectura AWS Serverless (Costo $0 USD / Free Tier)</div>
+    <h1>Sistema Escolar de Citas Docente-Acudiente</h1>
+    <p class="subtitle">Eliminación de colisiones de horarios por WhatsApp mediante reservas atómicas en Amazon DynamoDB y acceso móvil individualizado para docentes.</p>
+    
+    <div class="controls">
+      <button class="flow-btn active" data-flow="all" onclick="setFlow('all')">Todos los Componentes</button>
+      <button class="flow-btn" data-flow="acudiente" onclick="setFlow('acudiente')">🟢 Flujo Acudiente (Reserva Móvil)</button>
+      <button class="flow-btn" data-flow="profesor" onclick="setFlow('profesor')">🟣 Flujo Docente (Ver sus Citas)</button>
+      <button class="flow-btn" data-flow="anti-clash" onclick="setFlow('anti-clash')">⚡ Prevención de Cruces (DynamoDB)</button>
+      <button class="flow-btn" data-flow="security" onclick="setFlow('security')">🛡️ Seguridad (Tránsito & Reposo)</button>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="canvas-card">
+      <svg class="architecture-svg" viewBox="0 0 1000 560">
+        <defs>
+          <!-- Marcador de flecha general -->
+          <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1 L 9 5 L 0 9 z" fill="#94a3b8" />
+          </marker>
+          <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1 L 9 5 L 0 9 z" fill="#22c55e" />
+          </marker>
+          <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1 L 9 5 L 0 9 z" fill="#a855f7" />
+          </marker>
+          <marker id="arrow-orange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1 L 9 5 L 0 9 z" fill="#ff9900" />
+          </marker>
+
+          <!-- Filtros de Glow / Sombra -->
+          <filter id="glow-orange" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#ff9900" flood-opacity="0.2"/>
+          </filter>
+        </defs>
+
+        <!-- Limite AWS Cloud -->
+        <rect class="aws-boundary" x="220" y="20" width="760" height="520" />
+        <text x="240" y="46" fill="#ff9900" font-size="12" font-weight="700" letter-spacing="1">AWS CLOUD (REGION US-EAST-1 / SA-EAST-1)</text>
+
+        <!-- Capa de Seguridad Transversal en AWS (ACM & KMS) -->
+        <g id="security-bar" transform="translate(620, 26)" onclick="showDetails('kms')">
+          <rect x="0" y="0" width="340" height="26" rx="6" fill="#1e293b" stroke="#38bdf8" stroke-width="1.2" />
+          <text x="10" y="17" font-size="11">🔐</text>
+          <text x="30" y="17" fill="#38bdf8" font-size="10" font-weight="700">AWS KMS (AES-256) & ACM (TLS 1.3 SSL/HTTPS)</text>
+        </g>
+
+        <!-- SUB-LIMITES LOGICOS -->
+        <!-- Frontend Hosting -->
+        <rect x="240" y="60" width="180" height="460" rx="10" fill="#0b1329" stroke="#1e293b" stroke-width="1" />
+        <text x="255" y="82" fill="#64748b" font-size="10" font-weight="700">EDGE & HOSTING</text>
+
+        <!-- Backend & Auth -->
+        <rect x="440" y="60" width="280" height="460" rx="10" fill="#0b1329" stroke="#1e293b" stroke-width="1" />
+        <text x="455" y="82" fill="#64748b" font-size="10" font-weight="700">COMPUTE & AUTHENTICATION</text>
+
+        <!-- Storage & Notifications -->
+        <rect x="740" y="60" width="220" height="460" rx="10" fill="#0b1329" stroke="#1e293b" stroke-width="1" />
+        <text x="755" y="82" fill="#64748b" font-size="10" font-weight="700">DATA & NOTIFICATIONS</text>
+
+        <!-- ==================== CONEXIONES / FLECHAS ==================== -->
+        <!-- Flujo 1: Acudiente (Verde) -->
+        <g id="lines-acudiente">
+          <!-- Acudiente -> CloudFront -->
+          <path id="conn-u1-cf" class="conn-path" d="M 170 140 L 270 140" stroke="#22c55e" marker-end="url(#arrow-green)" />
+          <!-- CloudFront -> S3 -->
+          <path id="conn-cf-s3" class="conn-path" d="M 330 180 L 330 330" stroke="#22c55e" marker-end="url(#arrow-green)" />
+          <!-- Acudiente App -> API Gateway -->
+          <path id="conn-u1-api" class="conn-path" d="M 170 160 C 220 180, 380 200, 460 200" stroke="#22c55e" marker-end="url(#arrow-green)" />
+          <!-- API Gateway -> Lambda Booking -->
+          <path id="conn-api-lbook" class="conn-path" d="M 520 235 L 520 330" stroke="#22c55e" marker-end="url(#arrow-green)" />
+          <!-- Lambda Booking -> DynamoDB -->
+          <path id="conn-lbook-db" class="conn-path" d="M 640 370 L 760 370" stroke="#22c55e" marker-end="url(#arrow-green)" />
+          <!-- Lambda Booking -> SES (Notif) -->
+          <path id="conn-lbook-ses" class="conn-path" d="M 640 395 C 690 410, 710 440, 760 450" stroke="#22c55e" marker-end="url(#arrow-green)" />
+        </g>
+
+        <!-- Flujo 2: Profesor (Morado) -->
+        <g id="lines-profesor">
+          <!-- Docente -> CloudFront -->
+          <path id="conn-u2-cf" class="conn-path" d="M 170 380 C 200 370, 220 160, 270 150" stroke="#a855f7" marker-end="url(#arrow-purple)" />
+          <!-- Docente App -> Cognito (Login) -->
+          <path id="conn-u2-cog" class="conn-path" d="M 170 410 C 260 430, 370 140, 460 140" stroke="#a855f7" marker-end="url(#arrow-purple)" />
+          <!-- Docente App -> API Gateway (con JWT) -->
+          <path id="conn-u2-api" class="conn-path" d="M 170 400 C 300 380, 410 220, 460 215" stroke="#a855f7" marker-end="url(#arrow-purple)" />
+          <!-- API Gateway valida con Cognito Authorizer -->
+          <path id="conn-api-cog" class="conn-path" d="M 550 175 L 550 155" stroke="#a855f7" stroke-dasharray="3 3" />
+          <!-- API Gateway -> Lambda Teacher Appts -->
+          <path id="conn-api-lprof" class="conn-path" d="M 580 235 C 580 270, 580 270, 580 330" stroke="#a855f7" marker-end="url(#arrow-purple)" />
+          <!-- Lambda Teacher -> DynamoDB (Query por teacher_id) -->
+          <path id="conn-lprof-db" class="conn-path" d="M 640 350 C 690 350, 710 350, 760 350" stroke="#a855f7" marker-end="url(#arrow-purple)" />
+        </g>
+
+        <!-- ==================== NODOS / COMPONENTES ==================== -->
+
+        <!-- CLIENTE 1: Acudiente (Móvil) -->
+        <g class="node-group" onclick="showDetails('acudiente')">
+          <rect class="node-box" x="30" y="100" width="140" height="90" fill="#1e293b" stroke="#22c55e" />
+          <circle cx="55" cy="130" r="14" fill="#22c55e" fill-opacity="0.2" />
+          <text x="55" y="135" text-anchor="middle" font-size="14">📱</text>
+          <text class="node-title" x="78" y="130">Acudiente</text>
+          <text class="node-subtitle" x="78" y="145">PWA / Web Celular</text>
+          <rect x="40" y="160" width="120" height="18" rx="4" fill="#0f172a" />
+          <text class="node-badge" x="100" y="172" text-anchor="middle" fill="#22c55e">Reserva sin Login</text>
+        </g>
+
+        <!-- CLIENTE 2: Profesor (Móvil / Web) -->
+        <g class="node-group" onclick="showDetails('profesor')">
+          <rect class="node-box" x="30" y="350" width="140" height="90" fill="#1e293b" stroke="#a855f7" />
+          <circle cx="55" cy="380" r="14" fill="#a855f7" fill-opacity="0.2" />
+          <text x="55" y="385" text-anchor="middle" font-size="14">👨‍🏫</text>
+          <text class="node-title" x="78" y="380">Docente</text>
+          <text class="node-subtitle" x="78" y="395">Portal Móvil Docente</text>
+          <rect x="40" y="410" width="120" height="18" rx="4" fill="#0f172a" />
+          <text class="node-badge" x="100" y="422" text-anchor="middle" fill="#c084fc">Solo sus citas (JWT)</text>
+        </g>
+
+        <!-- NODO: Amazon CloudFront -->
+        <g class="node-group" onclick="showDetails('cloudfront')">
+          <rect class="node-box" x="270" y="105" width="120" height="85" fill="#1e293b" stroke="#38bdf8" />
+          <text x="285" y="130" font-size="16">🌐</text>
+          <text class="node-title" x="310" y="130">CloudFront</text>
+          <text class="node-subtitle" x="285" y="150">CDN & HTTPS Gratis</text>
+          <rect x="275" y="158" width="110" height="15" rx="3" fill="#0f172a" />
+          <text x="280" y="169" font-size="8" font-weight="700" fill="#38bdf8">🔒 Tránsito: TLS 1.3</text>
+          <text class="node-badge" x="285" y="184" fill="#94a3b8">1 TB Free Tier</text>
+        </g>
+
+        <!-- NODO: Amazon S3 (Web App) -->
+        <g class="node-group" onclick="showDetails('s3')">
+          <rect class="node-box" x="270" y="330" width="120" height="85" fill="#1e293b" stroke="#38bdf8" />
+          <text x="285" y="355" font-size="16">🪣</text>
+          <text class="node-title" x="310" y="355">Amazon S3</text>
+          <text class="node-subtitle" x="285" y="375">Single Page App</text>
+          <rect x="275" y="380" width="110" height="15" rx="3" fill="#0f172a" />
+          <text x="280" y="391" font-size="8" font-weight="700" fill="#22c55e">🛡️ Reposo: AES-256</text>
+          <text class="node-badge" x="285" y="407" fill="#94a3b8">SSL Enforced Policy</text>
+        </g>
+
+        <!-- NODO: Amazon Cognito -->
+        <g class="node-group" onclick="showDetails('cognito')">
+          <rect class="node-box" x="460" y="105" width="180" height="70" fill="#1e293b" stroke="#ef4444" />
+          <text x="475" y="130" font-size="16">🔐</text>
+          <text class="node-title" x="500" y="130">Amazon Cognito</text>
+          <text class="node-subtitle" x="475" y="150">User Pool Profesores (SRP/JWT)</text>
+          <text class="node-badge" x="475" y="163" fill="#f87171">Reposo: Cifrado Gestionado AWS</text>
+        </g>
+
+        <!-- NODO: Amazon API Gateway -->
+        <g class="node-group" onclick="showDetails('apigateway')">
+          <rect class="node-box" x="460" y="185" width="220" height="75" fill="#1e293b" stroke="#ff9900" />
+          <text x="475" y="210" font-size="16">🚪</text>
+          <text class="node-title" x="500" y="210">API Gateway (HTTP API)</text>
+          <text class="node-subtitle" x="475" y="228">HTTPS TLS 1.2/1.3 Obligatorio</text>
+          <rect x="475" y="235" width="190" height="15" rx="3" fill="#0f172a" />
+          <text x="480" y="246" font-size="8" font-weight="700" fill="#38bdf8">🔒 Tránsito: JWT Authorizer RS256</text>
+        </g>
+
+        <!-- NODO: AWS Lambda (Backend) -->
+        <g class="node-group" onclick="showDetails('lambda')">
+          <rect class="node-box" x="460" y="330" width="220" height="155" fill="#1e293b" stroke="#ff9900" />
+          <text x="475" y="355" font-size="16">λ</text>
+          <text class="node-title" x="495" y="355">AWS Lambda (Serverless)</text>
+          
+          <!-- Mini sub-servicios dentro de Lambda -->
+          <g transform="translate(470, 368)">
+            <rect width="200" height="26" rx="5" fill="#0f172a" stroke="#334155" />
+            <circle cx="12" cy="13" r="4" fill="#22c55e" />
+            <text x="24" y="17" fill="#e2e8f0" font-size="10">bookAppointment (Atomic)</text>
+          </g>
+          <g transform="translate(470, 398)">
+            <rect width="200" height="26" rx="5" fill="#0f172a" stroke="#334155" />
+            <circle cx="12" cy="13" r="4" fill="#a855f7" />
+            <text x="24" y="17" fill="#e2e8f0" font-size="10">getTeacherAppointments</text>
+          </g>
+          <g transform="translate(470, 428)">
+            <rect width="200" height="26" rx="5" fill="#0f172a" stroke="#334155" />
+            <circle cx="12" cy="13" r="4" fill="#38bdf8" />
+            <text x="24" y="17" fill="#e2e8f0" font-size="10">getAvailableSlots</text>
+          </g>
+          <text x="472" y="475" font-size="8.5" fill="#94a3b8">🔒 IAM Least Privilege + Env Vars KMS</text>
+        </g>
+
+        <!-- NODO: Amazon DynamoDB -->
+        <g class="node-group" onclick="showDetails('dynamodb')">
+          <rect class="node-box" x="760" y="300" width="180" height="115" fill="#1e293b" stroke="#3b82f6" />
+          <text x="775" y="325" font-size="16">🗄️</text>
+          <text class="node-title" x="800" y="325">Amazon DynamoDB</text>
+          <text class="node-subtitle" x="775" y="342">NoSQL Table: CitasEscolares</text>
+          
+          <rect x="770" y="350" width="160" height="20" rx="3" fill="#0f172a" stroke="#22c55e" />
+          <text x="776" y="364" fill="#22c55e" font-size="8.5" font-weight="700">🔒 Conditional Writes (Anti-Cruce)</text>
+
+          <rect x="770" y="375" width="160" height="20" rx="3" fill="#0f172a" stroke="#38bdf8" />
+          <text x="776" y="389" fill="#38bdf8" font-size="8.5" font-weight="700">🛡️ Reposo: KMS (AES-256)</text>
+
+          <text class="node-badge" x="775" y="408" fill="#94a3b8">Tránsito: HTTPS + SigV4</text>
+        </g>
+
+        <!-- NODO: Amazon SES / Notificaciones -->
+        <g class="node-group" onclick="showDetails('ses')">
+          <rect class="node-box" x="760" y="430" width="180" height="75" fill="#1e293b" stroke="#eab308" />
+          <text x="775" y="455" font-size="16">📧</text>
+          <text class="node-title" x="800" y="455">Amazon SES / SNS</text>
+          <text class="node-subtitle" x="775" y="475">Confirmación Email + ICS</text>
+          <text class="node-badge" x="775" y="492" fill="#eab308">62.000 emails/mes gratis</text>
+        </g>
+
+      </svg>
+    </div>
+
+    <!-- PANELES INFORMATIVOS -->
+    <div class="details-panel">
+      <!-- 1. Cómo se evitan los cruces -->
+      <div class="info-card" style="border-left: 4px solid var(--aws-green);">
+        <h3>⚡ ¿Cómo se eliminan los cruces de citas?</h3>
+        <p>WhatsApp falla porque dos padres pueden escribir al mismo tiempo y recibir confirmación manual desfasada. Esta solución usa <strong>Amazon DynamoDB Conditional Writes</strong>:</p>
+        <ul>
+          <li><strong>Partition Key (PK):</strong> <span class="highlight-pill">DOCENTE#prof_garcia</span></li>
+          <li><strong>Sort Key (SK):</strong> <span class="highlight-pill">SLOT#2026-11-20#09:30</span></li>
+          <li><strong>Condición Atómica:</strong> <span class="highlight-pill">attribute_not_exists(SK)</span></li>
+        </ul>
+        <p style="margin-top:8px;">Si dos acudientes intentan apartar la misma hora simultáneamente, la base de datos solo acepta al primero por microsegundos y rechaza automáticamente al segundo en milisegundos con un mensaje instantáneo: <em>"Horario ya reservado, por favor elija otro"</em>.</p>
+      </div>
+
+      <!-- 2. Seguridad y Privacidad Docente -->
+      <div class="info-card" style="border-left: 4px solid var(--aws-purple);">
+        <h3>🔒 ¿Cómo cada profesor ve solo sus citas?</h3>
+        <p>Garantía de privacidad y segregación estricta sin servidores:</p>
+        <ul>
+          <li><strong>Amazon Cognito:</strong> Cada profesor tiene un usuario institucional (ej. <span class="highlight-pill">garcia@colegio.edu</span>).</li>
+          <li><strong>Token JWT:</strong> Al iniciar sesión, la app móvil recibe un token firmado con el ID único del profesor (<span class="highlight-pill">sub</span>).</li>
+          <li><strong>Aislamiento en Lambda:</strong> La función extrae el <span class="highlight-pill">teacher_id</span> directamente del token verificado por API Gateway, imposibilitando que un docente altere la petición para ver citas de otros.</li>
+        </ul>
+      </div>
+
+      <!-- 3. Desglose de Costos (Presupuesto $0) -->
+      <div class="info-card" style="border-left: 4px solid var(--aws-orange);">
+        <h3>💰 Presupuesto Inicial: $0 USD (Cero Servidores)</h3>
+        <table class="cost-table">
+          <thead>
+            <tr>
+              <th>Servicio AWS</th>
+              <th>Capa Gratuita (Free Tier)</th>
+              <th>Costo Institución</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>AWS Lambda</strong></td>
+              <td>1 Millón invocaciones/mes perpetuas</td>
+              <td class="cost-free">$0.00 / mes</td>
+            </tr>
+            <tr>
+              <td><strong>Amazon DynamoDB</strong></td>
+              <td>25 GB almacenamiento + 25 RCU/WCU</td>
+              <td class="cost-free">$0.00 / mes</td>
+            </tr>
+            <tr>
+              <td><strong>Amazon S3 + CloudFront</strong></td>
+              <td>1 TB transferencia + HTTPS global</td>
+              <td class="cost-free">$0.00 / mes</td>
+            </tr>
+            <tr>
+              <td><strong>Amazon Cognito</strong></td>
+              <td>50.000 usuarios activos al mes</td>
+              <td class="cost-free">$0.00 / mes</td>
+            </tr>
+            <tr>
+              <td><strong>Amazon SES (Email)</strong></td>
+              <td>62.000 emails/mes salientes</td>
+              <td class="cost-free">$0.00 / mes</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- SECCIÓN: PROYECCIÓN FINANCIERA POST-FREE TIER -->
+    <div class="info-card" style="margin-top: 16px; border: 1px solid #38bdf8; background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
+        <h3 style="color: #38bdf8; font-size: 1.2rem;">📊 Proyección Financiera Detallada: ¿Qué pasa cuando termina la capa gratuita?</h3>
+        <span class="highlight-pill" style="color: #4ade80; border-color: #22c55e;">Modelo Serverless: Costo cercano a $0 de por vida</span>
+      </div>
+      
+      <p style="margin-bottom: 16px; font-size: 0.9rem; line-height: 1.6;">
+        En AWS existen dos tipos de capa gratuita: los servicios <strong>Always Free (Gratis de por vida)</strong> y los <strong>12-Month Free (Primeros 12 meses)</strong>. Como esta arquitectura utiliza componentes Serverless de bajísimo peso, <strong>más del 90% de los servicios se mantienen gratis de forma permanente</strong>.
+      </p>
+
+      <!-- Tabla Comparativa de Servicios -->
+      <table class="cost-table" style="font-size: 0.85rem; margin-bottom: 20px;">
+        <thead>
+          <tr style="background: rgba(56, 189, 248, 0.1);">
+            <th>Servicio AWS</th>
+            <th>Tipo de Capa Gratuita</th>
+            <th>Año 1 (Free Tier)</th>
+            <th>Año 2 en adelante (Tarifa Post-Free Tier)</th>
+            <th>Costo Mensual Estimado (Colegio)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>AWS Lambda</strong></td>
+            <td><span class="highlight-pill" style="color:#4ade80;">Always Free (Perpetuo)</span></td>
+            <td>$0.00</td>
+            <td>1,000,000 invocaciones/mes GRATIS siempre. Luego $0.20 por millón.</td>
+            <td class="cost-free">$0.00 USD</td>
+          </tr>
+          <tr>
+            <td><strong>Amazon DynamoDB</strong></td>
+            <td><span class="highlight-pill" style="color:#4ade80;">Always Free (Perpetuo)</span></td>
+            <td>$0.00</td>
+            <td>25 GB de almacenamiento y 25 RCU/WCU GRATIS siempre.</td>
+            <td class="cost-free">$0.00 USD</td>
+          </tr>
+          <tr>
+            <td><strong>Amazon CloudFront</strong></td>
+            <td><span class="highlight-pill" style="color:#4ade80;">Always Free (Perpetuo)</span></td>
+            <td>$0.00</td>
+            <td>1 TB de transferencia mensual + 10M solicitudes GRATIS siempre.</td>
+            <td class="cost-free">$0.00 USD</td>
+          </tr>
+          <tr>
+            <td><strong>Amazon Cognito</strong></td>
+            <td><span class="highlight-pill" style="color:#4ade80;">Always Free (Perpetuo)</span></td>
+            <td>$0.00</td>
+            <td>Hasta 50,000 usuarios activos al mes GRATIS siempre.</td>
+            <td class="cost-free">$0.00 USD</td>
+          </tr>
+          <tr>
+            <td><strong>Amazon API Gateway (HTTP)</strong></td>
+            <td><span class="highlight-pill" style="color:#f59e0b;">12 Meses Gratis</span></td>
+            <td>$0.00 (1M/mes)</td>
+            <td>$1.00 USD por cada 1,000,000 de solicitudes recibidas.</td>
+            <td style="color:#38bdf8; font-weight:600;">~$0.02 - $0.05 USD</td>
+          </tr>
+          <tr>
+            <td><strong>Amazon S3 (Hosting Web)</strong></td>
+            <td><span class="highlight-pill" style="color:#f59e0b;">12 Meses Gratis</span></td>
+            <td>$0.00 (5 GB)</td>
+            <td>$0.023 por GB almacenado. La web pesa ~15 MB.</td>
+            <td style="color:#38bdf8; font-weight:600;">~$0.001 USD</td>
+          </tr>
+          <tr>
+            <td><strong>Amazon SES (Confirmación)</strong></td>
+            <td><span class="highlight-pill" style="color:#f59e0b;">Pago por uso / 62k</span></td>
+            <td>$0.00</td>
+            <td>$0.10 USD por cada 1,000 correos electrónicos enviados.</td>
+            <td style="color:#38bdf8; font-weight:600;">~$0.05 - $0.10 USD</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Escenarios Reales -->
+      <h4 style="color: #f8fafc; margin-bottom: 10px; font-size: 1rem;">📈 Proyección Anual por Escenarios de Institución Educativa:</h4>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-bottom: 16px;">
+        
+        <div style="background: #0f172a; padding: 14px; border-radius: 8px; border: 1px solid #334155;">
+          <div style="color: #22c55e; font-weight: 700; margin-bottom: 4px;">🏫 Colegio Pequeño / Mediano</div>
+          <p style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 8px;">30 a 50 Profesores | ~500 citas/mes</p>
+          <div style="font-size: 1.4rem; font-weight: 800; color: #f8fafc; margin-bottom: 4px;">~$0.10 <span style="font-size: 0.8rem; color: #94a3b8;">USD / mes</span></div>
+          <p style="font-size: 0.78rem; color: #4ade80;">Costo anual (Año 2+): ~$1.20 USD al año (~$5.000 COP)</p>
+        </div>
+
+        <div style="background: #0f172a; padding: 14px; border-radius: 8px; border: 1px solid #334155;">
+          <div style="color: #38bdf8; font-weight: 700; margin-bottom: 4px;">🏫 Colegio Grande</div>
+          <p style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 8px;">100 Profesores | ~2.500 citas/mes</p>
+          <div style="font-size: 1.4rem; font-weight: 800; color: #f8fafc; margin-bottom: 4px;">~$0.45 <span style="font-size: 0.8rem; color: #94a3b8;">USD / mes</span></div>
+          <p style="font-size: 0.78rem; color: #38bdf8;">Costo anual (Año 2+): ~$5.40 USD al año (~$22.000 COP)</p>
+        </div>
+
+        <div style="background: #0f172a; padding: 14px; border-radius: 8px; border: 1px solid #ef4444;">
+          <div style="color: #ef4444; font-weight: 700; margin-bottom: 4px;">❌ Servidor Tradicional (EC2 / VPS)</div>
+          <p style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 8px;">Servidor mínimo encendido 24/7</p>
+          <div style="font-size: 1.4rem; font-weight: 800; color: #f87171; margin-bottom: 4px;">~$15.00 <span style="font-size: 0.8rem; color: #94a3b8;">USD / mes</span></div>
+          <p style="font-size: 0.78rem; color: #f87171;">Costo anual: $180.00 USD + mantenimiento</p>
+        </div>
+
+      </div>
+
+      <div style="background: rgba(34, 197, 94, 0.1); border-left: 4px solid #22c55e; padding: 10px 14px; border-radius: 4px; font-size: 0.84rem; color: #cbd5e1;">
+        <strong>Conclusión de Viabilidad:</strong> Incluso habiendo vencido el primer año de prueba gratuita, la institución pagará <strong>menos de $1 a $5 dólares por todo un año de funcionamiento</strong>. No se requiere presupuesto de servidores ni tarjetas de crédito con gastos imprevistos; se puede activar una alarma en <em>AWS Budgets</em> fijada en $2.00 USD mensuales para tranquilidad absoluta.
+      </div>
+    </div>
+
+    <!-- SECCIÓN: SEGURIDAD EN TRÁNSITO Y EN REPOSO -->
+    <div id="security-section" class="info-card" style="margin-top: 16px; border: 1px solid #10b981; background: linear-gradient(180deg, #1e293b 0%, #064e3b22 100%);">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
+        <h3 style="color: #34d399; font-size: 1.2rem;">🛡️ Estrategia de Seguridad Integral: En Tránsito y En Reposo</h3>
+        <span class="highlight-pill" style="color: #34d399; border-color: #059669;">Cumplimiento Protección de Datos y Privacidad</span>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-top: 10px;">
+        <!-- Seguridad en Tránsito -->
+        <div style="background: #0f172a; padding: 16px; border-radius: 8px; border: 1px solid #1e293b; border-left: 3px solid #38bdf8;">
+          <h4 style="color: #38bdf8; margin-bottom: 8px; font-size: 0.95rem;">🔒 1. Seguridad en Tránsito (Encryption in Transit)</h4>
+          <ul style="font-size: 0.84rem; color: #cbd5e1; line-height: 1.6; padding-left: 18px;">
+            <li><strong>TLS 1.3 / HTTPS Obligatorio:</strong> Todo el tráfico desde el celular (Acudiente y Docente) hacia CloudFront y API Gateway viaja bajo HTTPS con certificados SSL emitidos por <em>AWS Certificate Manager (ACM)</em> a costo $0.</li>
+            <li><strong>Redirección Forzada:</strong> Las conexiones HTTP son redirigidas automáticamente a HTTPS (<span class="highlight-pill">redirect-to-https</span>).</li>
+            <li><strong>S3 SecureTransport Policy:</strong> El bucket de S3 tiene una política de rechazo explícito a cualquier petición no encriptada (<span class="highlight-pill">aws:SecureTransport: false</span>).</li>
+            <li><strong>Firma Criptográfica SigV4:</strong> Todas las llamadas internas entre Lambda, DynamoDB y SES utilizan <em>AWS Signature Version 4</em> sobre la red privada interna de AWS con TLS mutuo.</li>
+            <li><strong>Tokens RS256:</strong> Las sesiones docentes usan tokens JWT firmados con RSA-SHA256, validados en el borde por API Gateway antes de llegar a la lógica.</li>
+          </ul>
+        </div>
+
+        <!-- Seguridad en Reposo -->
+        <div style="background: #0f172a; padding: 16px; border-radius: 8px; border: 1px solid #1e293b; border-left: 3px solid #34d399;">
+          <h4 style="color: #34d399; margin-bottom: 8px; font-size: 0.95rem;">🔐 2. Seguridad en Reposo (Encryption at Rest)</h4>
+          <ul style="font-size: 0.84rem; color: #cbd5e1; line-height: 1.6; padding-left: 18px;">
+            <li><strong>DynamoDB Cifrado con KMS:</strong> La tabla de citas escolares utiliza cifrado transparente con claves administradas por AWS (<span class="highlight-pill">aws/dynamodb</span>) utilizando el estándar militar <strong>AES-256</strong> sin costo extra.</li>
+            <li><strong>S3 Server-Side Encryption (SSE-S3 / SSE-KMS):</strong> Los assets estáticos y archivos de la aplicación están cifrados en disco con AES-256 por defecto.</li>
+            <li><strong>Cognito User Credentials:</strong> Las contraseñas de los profesores nunca se guardan en texto plano; se protegen mediante hash salteado con algoritmos robustos y protocolo SRP (Secure Remote Password).</li>
+            <li><strong>Variables de Entorno Lambda:</strong> Parámetros confidenciales y secretos de configuración se cifran mediante claves de AWS KMS en reposo.</li>
+            <li><strong>Logs de Auditoría en CloudWatch:</strong> Los registros de auditoría y trazas de peticiones se almacenan cifrados para cumplir con normativas de protección de datos de menores.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Interactivo -->
+  <div id="service-modal">
+    <button class="close-btn" onclick="closeModal()">×</button>
+    <h4 id="modal-title">Título del Servicio</h4>
+    <p id="modal-desc">Descripción técnica del servicio en la arquitectura.</p>
+    <div id="modal-cost" class="highlight-pill">Costo: Free Tier</div>
+  </div>
+
+  <script>
+    const serviceInfo = {
+      acudiente: {
+        title: "Acudiente (Interfaz Móvil)",
+        desc: "El padre o tutor entra desde un link (incluso enviado por WhatsApp o código QR). Ve un calendario interactivo con los slots libres del profesor de su hijo. Al no requerir registro pesado, la adopción es del 100%.",
+        cost: "Sin costo de licencias ni servidores"
+      },
+      profesor: {
+        title: "Docente (Portal Móvil)",
+        desc: "Cada profesor accede con su correo y contraseña. Ve su agenda del día/semana organizada cronológicamente con nombre del estudiante, acudiente y motivo. Puede bloquear horas de descanso.",
+        cost: "Sin costo para hasta 50.000 docentes en Cognito"
+      },
+      cloudfront: {
+        title: "Amazon CloudFront & S3",
+        desc: "Distribuye la aplicación web (HTML, JS, CSS) a máxima velocidad en teléfonos móviles con certificado SSL (HTTPS TLS 1.3) gratuito incluido.",
+        cost: "1 TB de datos al mes totalmente gratis"
+      },
+      s3: {
+        title: "Amazon S3 (Hosting Estático)",
+        desc: "Almacena los archivos compilados de la interfaz. Encriptado en reposo con SSE-S3 (AES-256) y política que bloquea peticiones no seguras.",
+        cost: "5 GB de almacenamiento Free Tier (la web pesa < 10 MB)"
+      },
+      cognito: {
+        title: "Amazon Cognito (Autenticación)",
+        desc: "Gestiona usuarios, contraseñas seguras mediante SRP, tokens JWT firmados con RS256 y sesiones de los profesores. Cifrado nativo en reposo.",
+        cost: "50,000 Usuarios Activos Mensuales (MAU) gratis"
+      },
+      apigateway: {
+        title: "Amazon API Gateway (HTTP API)",
+        desc: "Puerta de enlace con HTTPS obligatorio (TLS 1.2/1.3). Valida el token JWT del docente antes de tocar el backend y mitiga ataques DDoS mediante Throttling.",
+        cost: "1 millón de llamadas gratis los primeros 12 meses, luego ~$1 por millón"
+      },
+      lambda: {
+        title: "AWS Lambda (Lógica Serverless)",
+        desc: "Microservicios que se ejecutan en microVMs aisladas (Firecracker). Roles IAM de privilegio mínimo y variables de entorno cifradas en reposo con KMS.",
+        cost: "1,000,000 de ejecuciones gratuitas cada mes para siempre"
+      },
+      dynamodb: {
+        title: "Amazon DynamoDB (Base de Datos NoSQL)",
+        desc: "Base de datos con cifrado transparente en reposo mediante AES-256 (AWS KMS). Bloquea cruces de citas en tiempo real mediante Conditional Writes.",
+        cost: "25 GB y 25 unidades de capacidad gratis para siempre (KMS incluido)"
+      },
+      ses: {
+        title: "Amazon SES / SNS",
+        desc: "Envío seguro de notificaciones por email vía TLS y firma criptográfica DKIM/SPF para evitar suplantación de identidad del colegio.",
+        cost: "62,000 correos salientes al mes sin costo"
+      },
+      kms: {
+        title: "AWS KMS & AWS Certificate Manager (ACM)",
+        desc: "KMS administra las claves maestras para cifrar en reposo DynamoDB y S3 con AES-256. ACM emite y renueva automáticamente certificados SSL/TLS gratuitos.",
+        cost: "Claves administradas por AWS son 100% gratuitas"
+      }
+    };
+
+    function showDetails(key) {
+      const data = serviceInfo[key];
+      if (!data) return;
+      document.getElementById('modal-title').textContent = data.title;
+      document.getElementById('modal-desc').textContent = data.desc;
+      document.getElementById('modal-cost').textContent = data.cost;
+      document.getElementById('service-modal').style.display = 'block';
+    }
+
+    function closeModal() {
+      document.getElementById('service-modal').style.display = 'none';
+    }
+
+    function setFlow(flow) {
+      const buttons = document.querySelectorAll('.flow-btn');
+      buttons.forEach(b => b.classList.remove('active'));
+      const activeBtn = document.querySelector(`.flow-btn[data-flow="${flow}"]`);
+      if (activeBtn) activeBtn.classList.add('active');
+
+      const linesAcudiente = document.querySelectorAll('#lines-acudiente path');
+      const linesProfesor = document.querySelectorAll('#lines-profesor path');
+
+      // Reset
+      linesAcudiente.forEach(p => {
+        p.style.opacity = "0.7";
+        p.classList.remove('animated');
+      });
+      linesProfesor.forEach(p => {
+        p.style.opacity = "0.7";
+        p.classList.remove('animated');
+      });
+
+      if (flow === 'acudiente') {
+        linesAcudiente.forEach(p => {
+          p.style.opacity = "1";
+          p.classList.add('animated');
+        });
+        linesProfesor.forEach(p => p.style.opacity = "0.1");
+      } else if (flow === 'profesor') {
+        linesProfesor.forEach(p => {
+          p.style.opacity = "1";
+          p.classList.add('animated');
+        });
+        linesAcudiente.forEach(p => p.style.opacity = "0.1");
+      } else if (flow === 'anti-clash') {
+        linesAcudiente.forEach(p => p.style.opacity = "0.1");
+        linesProfesor.forEach(p => p.style.opacity = "0.1");
+        const bookDb = document.getElementById('conn-lbook-db');
+        if (bookDb) {
+          bookDb.style.opacity = "1";
+          bookDb.classList.add('animated');
+          bookDb.style.stroke = "#22c55e";
+          bookDb.style.strokeWidth = "4";
+        }
+        showDetails('dynamodb');
+      } else if (flow === 'security') {
+        linesAcudiente.forEach(p => {
+          p.style.opacity = "1";
+          p.style.stroke = "#34d399";
+          p.classList.add('animated');
+        });
+        linesProfesor.forEach(p => {
+          p.style.opacity = "1";
+          p.style.stroke = "#38bdf8";
+          p.classList.add('animated');
+        });
+        showDetails('kms');
+        const secSec = document.getElementById('security-section');
+        if (secSec) secSec.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  </script>
+</body>
+</html>

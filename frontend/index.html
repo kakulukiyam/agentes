@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Citas Escolares - Colegio San José</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <div class="app-wrapper">
+    <!-- Encabezado de la App -->
+    <header class="app-header">
+      <div class="brand-box">
+        <div class="brand-icon">🏫</div>
+        <div class="brand-info">
+          <h1>Colegio San José</h1>
+          <span id="header-subtitle">Atención y Citas de Profesores</span>
+        </div>
+      </div>
+      <span class="mode-badge" id="conn-status">● Serverless</span>
+    </header>
+
+    <!-- Pestañas de Navegación -->
+    <nav class="tabs-nav">
+      <button class="tab-btn active" id="tab-acudiente" onclick="switchTab('acudiente')">
+        📱 Pedir Cita
+      </button>
+      <button class="tab-btn" id="tab-docente" onclick="switchTab('docente')">
+        👨‍🏫 Soy Docente
+      </button>
+    </nav>
+
+    <!-- Contenido Principal -->
+    <main class="main-content">
+      
+      <!-- Alertas de Conflicto y Éxito -->
+      <div id="alert-error" class="alert alert-error"></div>
+      <div id="alert-success" class="alert alert-success"></div>
+
+      <!-- ===============================================================
+           SECCIÓN ACUDIENTE
+           =============================================================== -->
+      <section id="section-acudiente">
+        <div class="section-label">1. Selecciona Docente y Fecha</div>
+        
+        <div class="form-group">
+          <label for="select-docente">Docente / Materia</label>
+          <select id="select-docente" class="form-control" onchange="loadSlots()">
+            <option value="prof-garcia">Prof. Carlos García — Matemáticas</option>
+            <option value="prof-martinez">Prof. Laura Martínez — Español y Literatura</option>
+            <option value="prof-rodriguez">Prof. Andrés Rodríguez — Ciencias Naturales</option>
+            <option value="prof-gomez">Prof. Sofía Gómez — Inglés</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="input-fecha">Fecha de Atención</label>
+          <input type="date" id="input-fecha" class="form-control" onchange="loadSlots()">
+        </div>
+
+        <div class="section-label" style="margin-top: 18px;">2. Horarios Libres (30 min)</div>
+        <div class="slots-container" id="slots-grid">
+          <div style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 12px;">
+            Cargando horarios disponibles...
+          </div>
+        </div>
+
+        <div class="section-label" style="margin-top: 18px;">3. Datos del Acudiente y Alumno</div>
+        
+        <div class="form-group">
+          <label for="input-acudiente">Nombre Completo del Acudiente</label>
+          <input type="text" id="input-acudiente" class="form-control" placeholder="Ej. Mariana Gómez">
+        </div>
+
+        <div class="form-group">
+          <label for="input-estudiante">Nombre del Estudiante y Grado</label>
+          <input type="text" id="input-estudiante" class="form-control" placeholder="Ej. Juan Pérez — 8° B">
+        </div>
+
+        <div class="form-group">
+          <label for="input-email">Correo Electrónico (para confirmación)</label>
+          <input type="email" id="input-email" class="form-control" placeholder="mariana@gmail.com">
+        </div>
+
+        <div class="form-group">
+          <label for="input-motivo">Motivo Principal de la Cita</label>
+          <input type="text" id="input-motivo" class="form-control" placeholder="Ej. Rendimiento académico segundo periodo">
+        </div>
+
+        <button class="btn-submit" id="btn-agendar" onclick="agendarCita()">
+          <span>📅</span> Confirmar Cita sin Cruces
+        </button>
+      </section>
+
+      <!-- ===============================================================
+           SECCIÓN DOCENTE (Protegida por Cognito JWT)
+           =============================================================== -->
+      <section id="section-docente" style="display: none;">
+        <div class="docente-header">
+          <div class="docente-avatar" id="docente-avatar">CG</div>
+          <div>
+            <h3 style="font-size: 0.95rem;" id="docente-nombre">Prof. Carlos García</h3>
+            <p style="font-size: 0.75rem; color: #2563eb;" id="docente-email">garcia@colegio.edu • Matemáticas</p>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+          <div class="section-label" style="margin: 0;">Mis Citas Asignadas (<span id="total-citas">0</span>)</div>
+          <button style="border: none; background: #eff6ff; color: #2563eb; padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; cursor: pointer;" onclick="loadDocenteCitas()">
+            🔄 Actualizar
+          </button>
+        </div>
+
+        <div id="docente-citas-list">
+          <div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 30px;">
+            Consultando tu agenda personal...
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Scripts -->
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

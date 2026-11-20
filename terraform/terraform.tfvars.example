@@ -1,0 +1,5 @@
+aws_region          = "us-east-1"
+project_name        = "citas-escolares"
+environment         = "prod"
+ses_sender_email    = "rectoria@tu-colegio.edu.co"
+cors_allowed_origins = ["*"]

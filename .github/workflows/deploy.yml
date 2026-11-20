@@ -1,0 +1,182 @@
+name: Pipeline de Despliegue Serverless (OIDC)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Permisos requeridos para la autenticación OIDC segura con AWS
+permissions:
+  id-token: write # Permite a GitHub solicitar el token OIDC JWT
+  contents: read  # Permite leer el código del repositorio
+
+env:
+  AWS_REGION: "us-east-1"
+  # Configurar este ARN en GitHub > Settings > Secrets and variables > Actions > Variables
+  AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+
+jobs:
+  # ============================================================================
+  # FASE 1: DESPLIEGUE DE INFRAESTRUCTURA (TERRAFORM)
+  # ============================================================================
+  infrastructure:
+    name: 🏗️ 1. Despliegue de Infraestructura
+    runs-on: ubuntu-latest
+    outputs:
+      api_gateway_url: ${{ steps.tf_outputs.outputs.api_gateway_url }}
+      cloudfront_url: ${{ steps.tf_outputs.outputs.cloudfront_url }}
+      s3_bucket_name: ${{ steps.tf_outputs.outputs.s3_bucket_name }}
+      cloudfront_id: ${{ steps.tf_outputs.outputs.cloudfront_id }}
+      lambda_name: ${{ steps.tf_outputs.outputs.lambda_name }}
+      cognito_pool_id: ${{ steps.tf_outputs.outputs.cognito_pool_id }}
+      cognito_client_id: ${{ steps.tf_outputs.outputs.cognito_client_id }}
+    steps:
+      - name: Clonar Repositorio
+        uses: actions/checkout@v4
+
+      - name: Autenticación con AWS vía OIDC (Sin llaves fijas)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
+
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.0
+          terraform_wrapper: false
+
+      - name: Inicializar Terraform
+        run: |
+          cd terraform
+          terraform init
+
+      - name: Aplicar Infraestructura (DynamoDB, Cognito, S3, API Gateway)
+        run: |
+          cd terraform
+          terraform apply -auto-approve
+
+      - name: Extraer Parámetros de Infraestructura
+        id: tf_outputs
+        run: |
+          cd terraform
+          echo "api_gateway_url=$(terraform output -raw api_gateway_url)" >> $GITHUB_OUTPUT
+          echo "cloudfront_url=$(terraform output -raw cloudfront_url)" >> $GITHUB_OUTPUT
+          echo "s3_bucket_name=$(terraform output -raw s3_bucket_name)" >> $GITHUB_OUTPUT
+          echo "lambda_name=$(terraform output -raw lambda_function_name)" >> $GITHUB_OUTPUT
+          echo "cognito_pool_id=$(terraform output -raw cognito_user_pool_id)" >> $GITHUB_OUTPUT
+          echo "cognito_client_id=$(terraform output -raw cognito_app_client_id)" >> $GITHUB_OUTPUT
+          echo "cloudfront_id=$(terraform output -raw cloudfront_distribution_id)" >> $GITHUB_OUTPUT
+
+  # ============================================================================
+  # FASE 2: DESPLIEGUE DEL CÓDIGO BACKEND (AWS LAMBDA)
+  # ============================================================================
+  deploy-backend:
+    name: ⚙️ 2. Despliegue de Código Backend
+    needs: infrastructure
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clonar Repositorio
+        uses: actions/checkout@v4
+
+      - name: Autenticación con AWS vía OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Empaquetar Código de Lambda
+        run: |
+          cd backend
+          zip -r ../backend-deploy.zip app.py
+
+      - name: Actualizar Función Lambda en AWS
+        run: |
+          echo "Desplegando nuevo código en Lambda: ${{ needs.infrastructure.outputs.lambda_name }}"
+          aws lambda update-function-code \
+            --function-name ${{ needs.infrastructure.outputs.lambda_name }} \
+            --zip-file fileb://backend-deploy.zip
+
+      - name: Esperar a que Lambda esté activa
+        run: |
+          aws lambda wait function-updated --function-name ${{ needs.infrastructure.outputs.lambda_name }}
+          echo "✅ Backend actualizado y listo."
+
+  # ============================================================================
+  # FASE 3: DESPLIEGUE DEL CÓDIGO FRONTEND (S3 & CLOUDFRONT)
+  # ============================================================================
+  deploy-frontend:
+    name: 📱 3. Despliegue de Código Frontend
+    needs: [infrastructure, deploy-backend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clonar Repositorio
+        uses: actions/checkout@v4
+
+      - name: Autenticación con AWS vía OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
+
+      - name: Inyectar Configuración Dinámica (config.js)
+        run: |
+          cat <<EOF > frontend/config.js
+          // Generado automáticamente por el Pipeline de CI/CD
+          window.APP_CONFIG = {
+            API_BASE_URL: "${{ needs.infrastructure.outputs.api_gateway_url }}",
+            COGNITO_USER_POOL_ID: "${{ needs.infrastructure.outputs.cognito_pool_id }}",
+            COGNITO_CLIENT_ID: "${{ needs.infrastructure.outputs.cognito_client_id }}",
+            AWS_REGION: "${{ env.AWS_REGION }}",
+            USE_MOCK_FALLBACK: false
+          };
+          EOF
+          cat frontend/config.js
+
+      - name: Sincronizar Frontend con Bucket S3
+        run: |
+          echo "Subiendo archivos al bucket S3: ${{ needs.infrastructure.outputs.s3_bucket_name }}"
+          aws s3 sync frontend/ s3://${{ needs.infrastructure.outputs.s3_bucket_name }} \
+            --exclude "README.md" \
+            --delete
+
+      - name: Invalidar Caché de CloudFront
+        run: |
+          if [ -n "${{ needs.infrastructure.outputs.cloudfront_id }}" ]; then
+            echo "Invalidando CDN CloudFront: ${{ needs.infrastructure.outputs.cloudfront_id }}"
+            aws cloudfront create-invalidation \
+              --distribution-id ${{ needs.infrastructure.outputs.cloudfront_id }} \
+              --paths "/*"
+          fi
+          echo "🚀 Despliegue completo y en producción."
+
+  # ============================================================================
+  # FASE 4: PRUEBAS DE DISPONIBILIDAD (SMOKE TESTS POST-DESPLIEGUE)
+  # ============================================================================
+  verify-deployment:
+    name: 🧪 4. Pruebas de Disponibilidad (Sitio Arriba)
+    needs: [infrastructure, deploy-backend, deploy-frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clonar Repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Ejecutar Pruebas de Disponibilidad y Salud de la Aplicación
+        run: |
+          python .github/scripts/smoke_test.py \
+            --frontend-url "${{ needs.infrastructure.outputs.cloudfront_url }}" \
+            --api-url "${{ needs.infrastructure.outputs.api_gateway_url }}"
