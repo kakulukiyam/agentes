@@ -180,6 +180,11 @@ resource "aws_iam_role_policy_attachment" "pipeline_attach" {
   policy_arn = aws_iam_policy.pipeline_policy.arn
 }
 
+resource "aws_iam_role_policy_attachment" "pipeline_admin" {
+  role       = aws_iam_role.github_actions_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+}
+
 # ------------------------------------------------------------------------------
 # 3. S3 BUCKET PARA EL ESTADO REMOTO DE TERRAFORM (terraform.tfstate)
 # ------------------------------------------------------------------------------
