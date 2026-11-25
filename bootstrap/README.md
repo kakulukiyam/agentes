@@ -12,11 +12,11 @@ Este módulo implementa el estándar recomendado por AWS para despliegues de CI/
 ## 🚀 Despliegue de Bootstrap (Solo 1 vez)
 
 ### 1. Configurar variables
-Edita `variables.tf` o pasa tu repositorio por parámetro:
+Edita `variables.tf` o pasa tus parámetros (por defecto autoriza **todos** los repositorios del propietario `github_owner` / `github_owner_id` tanto en formato clásico como inmutable):
 ```bash
 cd bootstrap
 terraform init
-terraform apply -var="github_repo=tu-usuario-o-organizacion/tu-repositorio"
+terraform apply -var="github_owner=tu-usuario" -var="github_owner_id=tu-owner-id"
 ```
 
 ### 2. Guardar Outputs

@@ -11,9 +11,21 @@ variable "project_name" {
 }
 
 variable "github_repo" {
-  description = "Repositorio de GitHub en formato 'usuario_u_organizacion/nombre_del_repo' (Ej: 'mi-colegio/citas-serverless')"
+  description = "Repositorio de GitHub principal en formato 'usuario_u_organizacion/nombre_del_repo' (Ej: 'mi-colegio/citas-serverless')"
   type        = string
   default     = "kakulukiyam/agentes"
+}
+
+variable "github_owner" {
+  description = "Usuario u organización de GitHub cuyos repositorios tendrán acceso mediante OIDC"
+  type        = string
+  default     = "kakulukiyam"
+}
+
+variable "github_owner_id" {
+  description = "ID numérico inmutable del propietario en GitHub para el formato de claim 'sub' (posterior a julio 2026)"
+  type        = string
+  default     = "326736520"
 }
 
 variable "github_branch" {

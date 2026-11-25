@@ -21,3 +21,8 @@ output "aws_region" {
   description = "Región de AWS configurada"
   value       = var.aws_region
 }
+
+output "allowed_github_owner" {
+  description = "Propietario de GitHub autorizado para todos sus repositorios vía OIDC"
+  value       = "${var.github_owner} (ID: ${var.github_owner_id})"
+}

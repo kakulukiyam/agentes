@@ -73,12 +73,12 @@ resource "aws_iam_role" "github_actions_role" {
           StringEquals = {
             "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
           }
-          # Soporta tanto el formato estándar como el formato inmutable de sub claim de GitHub
+          # Soporta todos los repositorios del propietario en GitHub (formato clásico e inmutable de sub claim)
           StringLike = {
             "token.actions.githubusercontent.com:sub" = [
+              "repo:${var.github_owner}/*",
+              "repo:${var.github_owner}@${var.github_owner_id}/*",
               "repo:${var.github_repo}:*",
-              "repo:kakulukiyam/agentes:*",
-              "repo:kakulukiyam@326736520/agentes@1462156195:*",
               "repo:llorld43-gif/agentes:*",
               "repo:llorld43-gif@307716463/agentes@1462154844:*"
             ]
